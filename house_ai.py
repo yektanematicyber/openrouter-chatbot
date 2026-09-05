@@ -5,13 +5,14 @@ import pandas as pd
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 
-
 df = pd.read_csv("Guaynabo_houses.csv")
+
 
 renaming = {
     "bed": "bedrooms",
@@ -20,7 +21,6 @@ renaming = {
 }
 
 df = df.rename(columns=renaming)
-
 
 
 # %%
@@ -33,6 +33,7 @@ Your job is to find the property that best matches
 the user's request.
 
 The available property fields are:
+- id
 - price
 - bedrooms
 - bathrooms
@@ -52,9 +53,8 @@ Return JSON only:
 
 {{
     "id": null,
-    "aiopinion": "This property matches the user's request because it has 3 bedrooms, 2 bathrooms, and is within the requested budget."
+    "aiopinion": null
 }}
-
 """
 
     response = requests.post(
@@ -81,36 +81,69 @@ Return JSON only:
         })
     )
 
+
     data = response.json()
 
     if response.status_code != 200:
+
         print("\nAPI ERROR!")
         print(response.text)
+
         return {}
 
+
     try:
+
         answer = data["choices"][0]["message"]["content"]
+
     except (KeyError, IndexError):
+
         print("\nCould not find AI answer.")
+
         return {}
 
-    try:
-        parsed_answer = json.loads(answer)
-    except json.JSONDecodeError:
-        print("\nRaw answer:")
-        print(answer)
+
+
+    start = answer.find("{")
+    end = answer.rfind("}") + 1
+
+    if start == -1 or end == 0:
+
+        print("\nCould not find JSON in AI answer.")
+
         return {}
+
+
+    answer = answer[start:end]
+
+
+    try:
+
+        parsed_answer = json.loads(answer)
+
+    except json.JSONDecodeError:
+
+        print("\nThe AI did not return valid JSON.")
+        print(answer)
+
+        return {}
+
 
     return parsed_answer
-    
+
+
+# %%
 while True:
 
     user = input("\nYou: ")
 
+
+    # Exit
     if user.lower().strip() == "exit":
 
         print("Bye!")
         break
+
 
 
     response = llm(
@@ -118,11 +151,21 @@ while True:
         df.to_json(orient="records")
     )
 
-    result = df[df["id"] == response["id"]]
 
     if response["id"] is None:
-        print("\nChatbot:", response["aiopinion"])
-    continue
+
+        print(
+            "\nChatbot:",
+            response.get(
+                "aiopinion",
+                "I couldn't find a matching house."
+            )
+        )
+
+        continue
+
+
+    result = df[df["id"] == response["id"]]
 
 
     if result.empty:
@@ -131,8 +174,17 @@ while True:
 
         continue
 
+
     print("\nChatbot:")
-    print(response["aiopinion"])
+
+    print(
+        response.get(
+            "aiopinion",
+            ""
+        )
+    )
+
 
     print("\nHouse:")
-    display(result)
+
+    print(result)
