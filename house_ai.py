@@ -22,40 +22,49 @@ renaming = {
 
 df = df.rename(columns=renaming)
 
+memory = []
+
 
 # %%
-def llm(user_message, input_data):
+def llm(user_message, input_data, memory):
+
 
     prompt = f"""
 You are an AI real estate assistant.
 
-Your job is to find the property that best matches
-the user's request.
+Find all properties that match the user's request.
 
-The available property fields are:
+Available fields:
 - id
 - price
 - bedrooms
 - bathrooms
 - house size
 
-Available properties:
-
+Properties:
 {input_data}
 
+Conversation memory:
+{memory}
+
 User message:
-
 {user_message}
-
-Choose the property that best matches the user's request.
 
 Return JSON only:
 
 {{
-    "id": null,
-    "aiopinion": null
+    "ids": [],
+    "confidence": 0,
+    "aiopinion": ""
 }}
+
+Rules:
+- Return all matching property IDs in "ids".
+- "confidence" is a number from 0 to 100.
+- If there are no matches, return an empty "ids" list.
+- Use the conversation memory to understand previous requirements.
 """
+
 
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
@@ -148,24 +157,29 @@ while True:
 
     response = llm(
         user,
-        df.to_json(orient="records")
+        df.to_json(orient="records"),
+        memory
     )
 
+    memory.append({
+        "user": user,
+        "assistant": response
+    })
 
-    if response["id"] is None:
 
+    ids = response.get("ids", [])
+
+    if not ids:
         print(
             "\nChatbot:",
             response.get(
                 "aiopinion",
-                "I couldn't find a matching house."
-            )
+                "I couldn't find any matching houses."
         )
+    )
+    continue
 
-        continue
-
-
-    result = df[df["id"] == response["id"]]
+    result = df[df["id"].isin(ids)]
 
 
     if result.empty:
