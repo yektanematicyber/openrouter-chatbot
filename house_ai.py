@@ -29,6 +29,7 @@ memory = []
 def llm(user_message, input_data, memory):
 
 
+
     prompt = f"""
 You are an AI real estate assistant.
 
@@ -175,9 +176,9 @@ while True:
             response.get(
                 "aiopinion",
                 "I couldn't find any matching houses."
+            )
         )
-    )
-    continue
+        continue
 
     result = df[df["id"].isin(ids)]
 
@@ -199,6 +200,11 @@ while True:
     )
 
 
-    print("\nHouse:")
+    print(
+        "Confidence:",
+        response.get("confidence", 0),
+        "%"
+    )
 
+    print("\nHouses:")
     print(result)
