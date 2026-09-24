@@ -4,6 +4,9 @@ import json
 import pandas as pd
 import os
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 
 
 load_dotenv()
@@ -21,9 +24,51 @@ renaming = {
 }
 
 df = df.rename(columns=renaming)
+df["text"] = df.apply(
+    lambda row: f"""
+    House ID: {row['id']}
+    Price: {row['price']}
+    Bedrooms: {row['bedrooms']}
+    Bathrooms: {row['bathrooms']}
+    House size: {row['house size']}
+    """,
+    axis=1
+)
+embedding_model = SentenceTransformer(
+    "all-MiniLM-L6-v2"
+)
+
+# 5. Create embeddings
+embeddings = embedding_model.encode(
+    df["text"].tolist()
+)
+
+print("Embeddings created:", len(embeddings))
+
+
+
+embeddings = np.array(embeddings).astype("float32")
+
+index = faiss.IndexFlatL2(
+    embeddings.shape[1]
+)
+
+index.add(embeddings)
 
 memory = []
 
+def retrieve(query, k=5):
+
+    query_embedding = embedding_model.encode(
+        [query]
+    ).astype("float32")
+
+    distances, indices = index.search(
+        query_embedding,
+        k
+    )
+
+    return df.iloc[indices[0]]
 
 # %%
 def llm(user_message, input_data, memory):
@@ -156,9 +201,11 @@ while True:
 
 
 
+    retrieved_houses = retrieve(user)
+
     response = llm(
         user,
-        df.to_json(orient="records"),
+        retrieved_houses.to_json(orient="records"),
         memory
     )
 
