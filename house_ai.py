@@ -6,8 +6,8 @@ import os
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import faiss
+import time
 import numpy as np
-
 
 load_dotenv()
 
@@ -57,19 +57,48 @@ index.add(embeddings)
 
 memory = []
 
-def retrieve(query, k=5):
+
+
+def create_query_embedding(query):
 
     query_embedding = embedding_model.encode(
         [query]
     ).astype("float32")
+
+    return query_embedding
+
+def search_faiss(query_embedding, k):
 
     distances, indices = index.search(
         query_embedding,
         k
     )
 
-    return df.iloc[indices[0]]
+    return distances, indices
 
+def get_houses(indices, distances):
+
+    results = df.iloc[indices[0]].copy()
+
+    results["distance"] = distances[0]
+
+    return results
+
+def retrieve(query, k=20):
+
+    query_embedding = create_query_embedding(query)
+
+    distances, indices = search_faiss(
+        query_embedding,
+        k
+    )
+
+    results = get_houses(
+        indices,
+        distances
+    )
+
+    return results
 # %%
 def llm(user_message, input_data, memory):
 
@@ -201,18 +230,30 @@ while True:
 
 
 
-    retrieved_houses = retrieve(user)
-
-    response = llm(
-        user,
-        retrieved_houses.to_json(orient="records"),
-        memory
+    retrieved_houses = retrieve(user, k=30)
+    print("\nRetrieved houses:")
+    print(
+        retrieved_houses[
+            ["id", "bedrooms", "bathrooms", "price", "distance"]
+        ]
     )
 
+    start_time = time.time()
+
+    response = llm(
+    user,
+    retrieved_houses.to_json(orient="records"),
+    memory
+)
+
+    llm_time = time.time() - start_time
+
+    print("\nLLM response time:", llm_time, "seconds")
+
     memory.append({
-        "user": user,
-        "assistant": response
-    })
+            "user": user,
+            "assistant": response
+        })
 
 
     ids = response.get("ids", [])
